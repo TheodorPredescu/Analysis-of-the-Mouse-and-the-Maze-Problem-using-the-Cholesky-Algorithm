@@ -84,10 +84,9 @@ def LTRIS( L, b):
     start_line = 0
     for i in range(len(L)):
         for j in range(start_line, i):
-            # ceva e suspect; ==0 sau != 0 sau foarte aproape de adevar, dar doar ==0 teoretic e corecta
+            
             if L[i][j] == 0:
                 start_line += 1
-                # print(f"i = {i}\nstart line = {start_line}\n\n")
             x[i] -= L[i][j]*x[j]
         x[i] = x[i]/L[i][i]
     return x
@@ -97,7 +96,6 @@ def UTRIS( U, b):
     stop_line = len(b)
     for i in range(len(U) - 1, -1, -1):
         for j in range(i + 1, stop_line):
-            # aceeasi posibila problema
             if U[i][j] == 0:
                 stop_line -= 1    
             x[i] -=U[i][j]*b[j]
@@ -108,6 +106,7 @@ def CHOL(A):
     n = len(A)
     L = np.zeros_like(A, dtype=float)
     
+    # print(A)
     for k in range(n):
         sum1 = 0
         for j in range(k):
@@ -161,11 +160,7 @@ def generate_matrix(nr):
             b[i] = 1
     return np.array(matrix), np.array(b)
 
-def direct_calcul(nr):
-    A,b = generate_matrix(nr)
-    identity_matrix = np.identity(A.shape[0])
-    A = identity_matrix - A /4
-    b = b/2
+def direct_calcul(A, b):
     A = CHOL(A)
     b = LTRIS(A,b)
     At = np.transpose(A)
@@ -189,9 +184,66 @@ def kaczmarx_random(nr):
     A = identity_matrix - A /4
     b = b/2
     x = kaczmarz(A, b)
-    print(x)
+    # print(x)
 
 
+# pentru verificari Gauss-seidel
+def gauss_seidel(A, b, x0=None, tol=1e-6, max_iter=1000):
+    n = len(b)
+    
+    # Initial guess
+    if x0 is None:
+        x0 = np.zeros(n)
+
+    x = np.copy(x0)
+    
+    for iteration in range(max_iter):
+        x_old = np.copy(x)
+        
+        for i in range(n):
+            sigma = np.dot(A[i, :i], x[:i]) + np.dot(A[i, i+1:], x_old[i+1:])
+            x[i] = (b[i] - sigma) / A[i, i]
+            
+        # Check for convergence
+        if np.linalg.norm(x - x_old, ord=np.inf) < tol:
+            return x
+    
+    return x
+
+def direct_calcul_GS(nr):
+    A,b = generate_matrix(nr)
+    identity_matrix = np.identity(A.shape[0])
+    A = identity_matrix - A /4
+    b = b/2
+    initial_guess = np.zeros_like(b, dtype=float)
+    solution = gauss_seidel(A, b, x0 = initial_guess)
+
+
+def gaussian_elimination_partial_pivoting(A, b):
+    # Combine A and b into an augmented matrix
+    augmented_matrix = np.column_stack((A, b))
+
+    n = len(A)
+
+    for i in range(n):
+        # Partial pivoting: find the row with the maximum element in the current column
+        max_row = max(range(i, n), key=lambda k: abs(augmented_matrix[k][i]))
+        augmented_matrix[i], augmented_matrix[max_row] = augmented_matrix[max_row], augmented_matrix[i]
+
+        # Make the diagonal element 1
+        divisor = augmented_matrix[i][i]
+        augmented_matrix[i] /= divisor
+
+        # Make the other rows 0 in the current column
+        for k in range(n):
+            if k != i:
+                factor = augmented_matrix[k][i]
+                augmented_matrix[k] -= factor * augmented_matrix[i]
+
+    # Extract the solutions
+    solutions = augmented_matrix[:, -1]
+
+    return solutions
 
 ok = True
 while ok:
@@ -201,29 +253,60 @@ while ok:
     if option == 4:
         os.system('cls' if os.name == 'nt' else 'clear')
         break
+    # speed time
     elif option == 3:
         while True:
             number_plots = int(input("Introdu nr de rulari(minim 10): "))
             print("Va rugam astepati...")
             vector_CHOL = []
             vector_kaczmarx = []
+            vector_GS = []
+            vector_Gauss = []
             if number_plots >=10:
                 for i in range (10, number_plots + 1):
-                    
+
+                    # Gauss
+                    A,b = generate_matrix(i)
+                    identity_matrix = np.identity(A.shape[0])
+                    A = identity_matrix - A /4
+                    b = b/2
+                    start_time_G = time.time()
+                    xx = gaussian_elimination_partial_pivoting(A, b)
+                    stop_time_G = time.time()
+                    vector_Gauss.append(stop_time_G - start_time_G)
+
+                    # CHOL
+                    A,b = generate_matrix(i)
+                    identity_matrix = np.identity(A.shape[0])
+                    A = identity_matrix - A /4
+                    b = b/2
                     start_time = time.time()
-                    direct_calcul(i)
+                    direct_calcul(A ,b)
                     stop_time = time.time()
                     execution_time = stop_time - start_time
                     vector_CHOL.append(execution_time)
 
-                    start_time_k = time.time()
-                    kaczmarx_random(i)
-                    stop_time_k = time.time()
-                    execution_time_k = stop_time_k - start_time_k
-                    vector_kaczmarx.append(execution_time_k)
-                    
-                plt.plot(vector_CHOL, label='Vector CHOL')
-                plt.plot(vector_kaczmarx, label='Vector kaczmarx')
+                    # kaczmarx
+                    # start_time_k = time.time()
+                    # kaczmarx_random(i)
+                    # stop_time_k = time.time()
+                    # execution_time_k = stop_time_k - start_time_k
+                    # vector_kaczmarx.append(execution_time_k)
+
+
+                    # Gauss_Seidel
+                    # start_time_GS = time.time()
+                    # direct_calcul_GS(i)
+                    # stop_time_GS = time.time()
+                    # execution_time_GS = stop_time_GS - start_time_GS
+                    # vector_GS.append(execution_time_GS)
+                    print(f"Progress: {int((i + 1)/(number_plots + 1) * 100)}%", end= '\r')
+
+                plt.semilogy(vector_Gauss, label = 'Gauss with partial pivot')
+                # plt.semilogy(vector_GS, label = 'G-S')
+                # plt.semilogy(vector_kaczmarx, label = 'Kaczmarx')
+                plt.semilogy(vector_CHOL, label='CHOL')
+                # plt.plot(vector_kaczmarx, label='Vector kaczmarx')
                 plt.xlabel('Nr de intersectii')
                 plt.ylabel('Durata')
                 plt.legend()
@@ -231,7 +314,7 @@ while ok:
                 break
             else:
                 print("Am zis mai mare decat 10!\n")
-
+    # fisier
     elif option == 1:
     # pentru input din fisier
         print("The file should have the following format:\n\n\nNUMBER OF CONECTIONS\nMATRIX OF CONECTIONS\n(free line)\nTHE VECTOR CONECTIONS WITH FOOD\n\n")
@@ -244,6 +327,7 @@ while ok:
         # print(A)
         b = extract_b(file_path)
         # print(b)
+    # de la tastatura
     elif option == 2:
         # input tastatura
         os.system('cls' if os.name == 'nt' else 'clear')
@@ -265,6 +349,7 @@ while ok:
         # print()
         # print(b)
 
+        
         xx = np.linalg.solve(A, b)
 
         A = CHOL(A)
@@ -289,16 +374,7 @@ while ok:
 # Assuming you have a 10000x10000 matrix representing accuracy values
 #accuracy_matrix = np.random.rand(10000, 10000)  # Replace this with your accuracy data
 
-def plotFunction(A):
-    
-    # Plotting accuracy matrix as a heatmap
-    plt.figure(figsize=(8, 6))
-    # plt.imshow(accuracy_matrix, cmap='viridis', interpolation='nearest')
-    plt.colorbar(label='Accuracy')
-    plt.title('Accuracy of Probability Guessing')
-    plt.xlabel('Columns')
-    plt.ylabel('Rows')
-    plt.show()
+
 
 #buna
 # buna si tie
